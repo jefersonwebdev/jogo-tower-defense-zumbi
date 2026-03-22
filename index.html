@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Sobrevivência Zumbi - Mobile First</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050505;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            background: radial-gradient(circle at center bottom, #1a1a2e 0%, #050505 100%);
+        }
+
+        /* UI Principal */
+        #ui-layer {
+            position: absolute;
+            top: env(safe-area-inset-top, 10px);
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 15px;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .stat-card {
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            min-width: 100px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            pointer-events: auto;
+        }
+
+        /* Controlos de Toque */
+        #touch-controls {
+            position: absolute;
+            bottom: env(safe-area-inset-bottom, 20px);
+            left: 0;
+            right: 0;
+            height: 180px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 25px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .joystick-container {
+            width: 130px;
+            height: 130px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px dashed rgba(251, 191, 36, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+        }
+
+        .joystick-base {
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            position: relative;
+        }
+
+        #joystick-knob {
+            width: 45px;
+            height: 45px;
+            background: radial-gradient(circle, #fbbf24, #d97706);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.6);
+            transition: transform 0.1s;
+        }
+
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            pointer-events: auto;
+        }
+
+        .btn-circle {
+            width: 75px;
+            height: 75px;
+            background: rgba(30, 30, 30, 0.9);
+            border: 3px solid #fbbf24;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fbbf24;
+            font-weight: 800;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.6);
+        }
+
+        .btn-circle:active {
+            transform: scale(0.85);
+            background: #fbbf24;
+            color: black;
+        }
+
+        #side-inventory {
+            position: absolute;
+            left: 10px;
+            top: 45%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: auto;
+            z-index: 60;
+        }
+
+        .weapon-slot {
+            width: 50px;
+            height: 50px;
+            background: rgba(0,0,0,0.85);
+            border: 2px solid #333;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 900;
+            color: #666;
+            transition: 0.2s;
+        }
+
+        .weapon-slot.owned { color: #aaa; border-color: #555; }
+        .weapon-slot.active { color: #000; border-color: #fbbf24; background: #fbbf24; box-shadow: 0 0 10px #fbbf24; }
+
+        .bar-bg { width: 100%; height: 8px; background: #222; border-radius: 4px; margin-top: 6px; overflow: hidden; }
+        .bar-fill { height: 100%; transition: width 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+        #modal-overlay, #pause-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.92);
+            z-index: 200;
+            display: none;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        #pause-overlay {
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .menu-card {
+            background: #0a0a0a;
+            border: 1px solid #fbbf24;
+            border-radius: 20px;
+            padding: 24px;
+            max-width: 450px;
+            margin: auto;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        #wave-alert {
+            position: fixed;
+            top: 35%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+            z-index: 150;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+
+        .enemy-counter-card {
+            background: rgba(153, 27, 27, 0.85);
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-weight: 900;
+            font-size: 12px;
+            border: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .pause-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 12px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div class="flex flex-col gap-2">
+            <div class="stat-card">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Onda</div>
+                        <div id="wave-count" class="text-2xl font-black text-white">1</div>
+                    </div>
+                    <button onclick="togglePause()" class="pause-btn active:scale-90 transition-transform">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M5.5 3.5A.5.5 0 0 1 6 4v8a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5z"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="enemy-counter-card">
+                    <span class="text-[9px] opacity-70">VIVOS:</span>
+                    <span id="zombies-left-ui" class="text-white">0</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Evolução</div>
+                <div id="sp-count" class="text-xl font-bold text-purple-400">0 PT</div>
+            </div>
+        </div>
+
+        <div class="stat-card text-center min-w-[140px] border-yellow-500/30">
+            <div id="weapon-name" class="text-[10px] font-black text-yellow-500 uppercase mb-1">Pistola</div>
+            <div id="ammo-text" class="text-xl font-black tabular-nums">15 / 15</div>
+            <div class="bar-bg"><div id="ammo-fill" class="bar-fill bg-yellow-500" style="width: 100%"></div></div>
+            <div class="mt-2 text-yellow-500 font-black text-lg">$ <span id="gold-count">0</span></div>
+        </div>
+
+        <div class="flex flex-col gap-2">
+            <div class="stat-card">
+                <div class="flex justify-between text-[9px] font-black mb-1"><span>MURO</span> <span id="wall-hp">100</span></div>
+                <div class="bar-bg"><div id="wall-fill" class="bar-fill bg-blue-500" style="width: 100%"></div></div>
+            </div>
+            <div class="stat-card">
+                <div class="flex justify-between text-[9px] font-black mb-1"><span>VIDA</span> <span id="health-hp">100</span></div>
+                <div class="bar-bg"><div id="health-fill" class="bar-fill bg-green-500" style="width: 100%"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="side-inventory">
+        <div id="slot-pistol" class="weapon-slot owned active" onclick="selectWeapon('pistol')">PST</div>
+        <div id="slot-smg" class="weapon-slot" onclick="selectWeapon('smg')">SMG</div>
+        <div id="slot-shotgun" class="weapon-slot" onclick="selectWeapon('shotgun')">SHG</div>
+        <div id="slot-lmg" class="weapon-slot" onclick="selectWeapon('lmg')">LMG</div>
+    </div>
+
+    <div id="touch-controls">
+        <div class="joystick-container">
+            <div class="joystick-base" id="joy-base">
+                <div id="joystick-knob"></div>
+            </div>
+        </div>
+        
+        <div class="action-buttons">
+            <div class="btn-circle" id="btn-reload">
+                <span class="text-xs">RECAR.</span>
+            </div>
+            <div class="btn-circle" id="btn-switch">
+                <span class="text-xs">TROCAR</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="wave-alert">
+        <h1 id="wave-title" class="text-7xl font-black italic text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]">ONDA 1</h1>
+        <p class="text-yellow-500 font-black tracking-[0.3em] uppercase mt-2">Os mortos aproximam-se!</p>
+    </div>
+
+    <div id="pause-overlay">
+        <h2 class="text-5xl font-black text-yellow-500 mb-8 italic uppercase">Em Pausa</h2>
+        <button onclick="togglePause()" class="px-12 py-5 bg-white text-black font-black rounded-2xl text-xl hover:scale-105 transition-transform uppercase italic">Retomar Jogo</button>
+    </div>
+
+    <div id="modal-overlay">
+        <div class="menu-card">
+            <h2 class="text-2xl font-black text-center mb-6 text-yellow-500 uppercase tracking-tighter italic">Base de Operações</h2>
+            <div class="flex gap-2 mb-8">
+                <button class="flex-1 py-4 bg-yellow-500 text-black font-black rounded-xl" onclick="showTab('shop')">LOJA</button>
+                <button class="flex-1 py-4 bg-zinc-800 text-gray-400 font-black rounded-xl" onclick="showTab('rpg')">HABILIDADES</button>
+            </div>
+
+            <div id="shop-tab">
+                <div class="text-center mb-6 bg-zinc-900/50 p-4 rounded-2xl border border-white/5">
+                    <span class="text-[10px] text-gray-500 font-bold uppercase">Saldo em Conta</span>
+                    <div class="text-4xl font-black text-yellow-500">$ <span id="menu-gold">0</span></div>
+                </div>
+                <div id="shop-items" class="space-y-4"></div>
+            </div>
+
+            <div id="rpg-tab" class="hidden">
+                <div class="text-center mb-6 bg-zinc-900/50 p-4 rounded-2xl border border-white/5">
+                    <span class="text-[10px] text-gray-400 font-bold uppercase">Pontos Disponíveis</span>
+                    <div class="text-4xl font-black text-purple-500" id="menu-sp">0</div>
+                </div>
+                <div id="rpg-items" class="space-y-4"></div>
+            </div>
+
+            <button onclick="nextWave()" class="w-full mt-10 py-6 bg-white text-black font-black text-2xl rounded-2xl shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95 transition-all uppercase italic">Continuar Combate</button>
+        </div>
+    </div>
+
+    <div id="game-over" class="fixed inset-0 z-[300] bg-black flex flex-col items-center justify-center hidden p-10 text-center">
+        <div class="w-24 h-24 bg-red-600 rounded-full mb-6 flex items-center justify-center animate-pulse">
+            <span class="text-5xl">☠</span>
+        </div>
+        <h1 class="text-7xl font-black text-red-600 mb-2 italic">MORTO</h1>
+        <p class="text-xl text-gray-500 mb-10 font-bold uppercase tracking-widest">Sobreviveste a <span id="final-wave" class="text-white">0</span> ondas de terror</p>
+        <button onclick="location.reload()" class="bg-white text-black px-12 py-5 font-black rounded-2xl text-xl hover:scale-105 transition-transform uppercase italic">Tentar de Novo</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const WEAPONS = {
+            pistol: { name: "Pistola 9mm", fireRate: 350, maxAmmo: 15, reloadTime: 1200, color: "#94a3b8", type: "single", dmg: 12 },
+            smg: { name: "Submetralhadora", fireRate: 100, maxAmmo: 40, reloadTime: 1100, color: "#4ade80", type: "single", dmg: 10, price: 400 },
+            shotgun: { name: "Escopeta", fireRate: 900, maxAmmo: 8, reloadTime: 2000, color: "#f87171", type: "spread", dmg: 15, price: 700 },
+            lmg: { name: "Metralhadora Pesada", fireRate: 140, maxAmmo: 100, reloadTime: 3500, color: "#c084fc", type: "single", dmg: 18, price: 1200 }
+        };
+
+        let health = 100, maxHealth = 100;
+        let wallHealth = 100, maxWallHealth = 100;
+        let gold = 0, skillPoints = 0, currentWave = 0;
+        let gameActive = true, isPaused = false;
+        let ownedWeapons = ["pistol"], currentWp = "pistol";
+        let weaponAmmos = { pistol: 15, smg: 40, shotgun: 8, lmg: 100 };
+        let stats = { dmg: 0, spd: 0, hp: 0, rel: 0 };
+        
+        let moveDir = 0;
+        let enemies = [], projectiles = [], texts = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        const joyBase = document.getElementById('joy-base');
+        const joyKnob = document.getElementById('joystick-knob');
+        
+        function handleJoystick(e) {
+            if (!gameActive || isPaused) return;
+            const touch = e.touches ? e.touches[0] : e;
+            const rect = joyBase.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const dx = touch.clientX - centerX;
+            const maxDist = rect.width / 2;
+            const dist = Math.max(-1, Math.min(1, dx / maxDist));
+            
+            joyKnob.style.transform = `translate(calc(-50% + ${dist * 35}px), -50%)`;
+            moveDir = dist;
+        }
+
+        joyBase.addEventListener('touchstart', (e) => { e.preventDefault(); handleJoystick(e); });
+        joyBase.addEventListener('touchmove', (e) => { e.preventDefault(); handleJoystick(e); });
+        joyBase.addEventListener('touchend', () => { 
+            joyKnob.style.transform = 'translate(-50%, -50%)';
+            moveDir = 0;
+        });
+
+        document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if(!isPaused) player.startReload();
+        });
+        document.getElementById('btn-switch').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if(!isPaused) {
+                const idx = ownedWeapons.indexOf(currentWp);
+                const next = (idx + 1) % ownedWeapons.length;
+                selectWeapon(ownedWeapons[next]);
+            }
+        });
+
+        window.selectWeapon = function(key) {
+            if (ownedWeapons.includes(key)) {
+                currentWp = key;
+                player.isReloading = false;
+                player.updateUI();
+            }
+        };
+
+        window.togglePause = function() {
+            if(!gameActive) return;
+            isPaused = !isPaused;
+            document.getElementById('pause-overlay').style.display = isPaused ? 'flex' : 'none';
+        };
+
+        class FloatingText {
+            constructor(x, y, text, color) {
+                this.x = x; this.y = y; this.text = text; this.color = color;
+                this.life = 1.0;
+            }
+            update() {
+                this.y -= 0.8;
+                this.life -= 0.02;
+                return this.life <= 0;
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.font = "bold 14px 'Segoe UI'";
+                ctx.textAlign = "center";
+                ctx.shadowBlur = 4;
+                ctx.shadowColor = "black";
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+
+        class Player {
+            constructor() {
+                this.w = 44; this.h = 44;
+                this.x = canvas.width / 2;
+                this.y = canvas.height - 130;
+                this.rot = -Math.PI/2;
+                this.lastShot = 0;
+                this.isReloading = false;
+                this.reloadStart = 0;
+            }
+
+            update() {
+                if (!gameActive || isPaused) return;
+                const speed = (5.5 + stats.spd * 0.6);
+                this.x += moveDir * speed;
+                const margin = 20;
+                this.x = Math.max(margin, Math.min(canvas.width - margin - this.w, this.x));
+
+                if (this.isReloading) {
+                    const rTime = WEAPONS[currentWp].reloadTime * (Math.max(0.3, 1 - stats.rel * 0.12));
+                    if (Date.now() - this.reloadStart >= rTime) {
+                        weaponAmmos[currentWp] = WEAPONS[currentWp].maxAmmo;
+                        this.isReloading = false;
+                        this.updateUI();
+                    }
+                }
+
+                const target = this.getPriorityTarget();
+                if (target) {
+                    this.rot = Math.atan2(target.y - (this.y + this.h/2), (target.x + target.size/2) - (this.x + this.w/2));
+                    if (!this.isReloading) this.autoShoot(target);
+                } else {
+                    this.rot = -Math.PI / 2;
+                }
+            }
+
+            autoShoot(target) {
+                const w = WEAPONS[currentWp];
+                if (Date.now() - this.lastShot > w.fireRate) {
+                    if (weaponAmmos[currentWp] > 0) {
+                        this.fire(target);
+                        weaponAmmos[currentWp]--;
+                        this.lastShot = Date.now();
+                        this.updateUI();
+                    } else this.startReload();
+                }
+            }
+
+            fire(target) {
+                const w = WEAPONS[currentWp];
+                let d = w.dmg * (1 + stats.dmg * 0.2);
+                const muzzleX = (this.x + this.w/2) + Math.cos(this.rot) * 30;
+                const muzzleY = (this.y + this.h/2) + Math.sin(this.rot) * 30;
+                
+                const distRatio = Math.max(0, Math.min(1, target.y / (canvas.height - 160)));
+                const critChance = 0.05 + (distRatio * 0.35); 
+                
+                const isCrit = Math.random() < critChance;
+                if (isCrit) d *= 12;
+
+                if (w.type === 'spread') {
+                    for(let i=-2; i<=2; i++) projectiles.push(new Projectile(muzzleX, muzzleY, this.rot + i*0.12, d, isCrit));
+                } else {
+                    projectiles.push(new Projectile(muzzleX, muzzleY, this.rot, d, isCrit));
+                }
+            }
+
+            startReload() {
+                if (!this.isReloading && weaponAmmos[currentWp] < WEAPONS[currentWp].maxAmmo) {
+                    this.isReloading = true;
+                    this.reloadStart = Date.now();
+                }
+            }
+
+            getPriorityTarget() {
+                let best = null, maxImpact = -1;
+                enemies.forEach(e => {
+                    const distToPlayer = Math.hypot(e.x - this.x, e.y - this.y);
+                    const dangerScore = (e.y / canvas.height) * 1000 - distToPlayer;
+                    if (dangerScore > maxImpact) {
+                        maxImpact = dangerScore;
+                        best = e;
+                    }
+                });
+                return best;
+            }
+
+            draw() {
+                const wallY = canvas.height - 160;
+                const centerX = this.x + this.w/2;
+                const centerY = this.y + this.h/2;
+
+                // --- DESENHO DO CONE DE VISÃO ---
+                ctx.save();
+                const coneLength = canvas.height * 0.8;
+                const coneAngle = 0.45; 
+                
+                const grad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coneLength);
+                grad.addColorStop(0, 'rgba(251, 191, 36, 0.15)');
+                grad.addColorStop(0.5, 'rgba(251, 191, 36, 0.05)');
+                grad.addColorStop(1, 'rgba(251, 191, 36, 0)');
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, coneLength, this.rot - coneAngle, this.rot + coneAngle);
+                ctx.lineTo(centerX, centerY);
+                ctx.fill();
+                ctx.restore();
+
+                // Desenho do Muro
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(0, wallY, canvas.width, 10);
+                ctx.fillStyle = wallHealth > 30 ? '#3b82f6' : '#ef4444';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.fillRect(0, wallY, canvas.width * (wallHealth/maxWallHealth), 10);
+                ctx.shadowBlur = 0;
+
+                // Desenho do Jogador
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                if (this.isReloading) {
+                    const rTime = WEAPONS[currentWp].reloadTime * (Math.max(0.3, 1 - stats.rel * 0.12));
+                    const progress = (Date.now() - this.reloadStart) / rTime;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 35, -Math.PI/2, (-Math.PI/2) + (Math.PI*2 * progress));
+                    ctx.strokeStyle = '#fbbf24';
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                }
+                ctx.rotate(this.rot);
+                ctx.fillStyle = '#111';
+                ctx.fillRect(-this.w/2, -this.h/2, this.w, this.h);
+                ctx.strokeStyle = '#444';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(-this.w/2, -this.h/2, this.w, this.h);
+                ctx.fillStyle = WEAPONS[currentWp].color;
+                ctx.fillRect(10, -5, 25, 10);
+                ctx.fillStyle = '#000';
+                ctx.fillRect(30, -3, 5, 6);
+                ctx.restore();
+            }
+
+            updateUI() {
+                document.getElementById('wave-count').innerText = currentWave;
+                document.getElementById('gold-count').innerText = gold;
+                document.getElementById('menu-gold').innerText = gold;
+                document.getElementById('sp-count').innerText = `${skillPoints} PT`;
+                document.getElementById('menu-sp').innerText = skillPoints;
+                document.getElementById('health-hp').innerText = Math.ceil(health);
+                document.getElementById('health-fill').style.width = (health/maxHealth*100) + '%';
+                document.getElementById('wall-hp').innerText = Math.ceil(wallHealth);
+                document.getElementById('wall-fill').style.width = (wallHealth/maxWallHealth*100) + '%';
+                document.getElementById('weapon-name').innerText = WEAPONS[currentWp].name;
+                document.getElementById('ammo-text').innerText = `${weaponAmmos[currentWp]} / ${WEAPONS[currentWp].maxAmmo}`;
+                document.getElementById('ammo-fill').style.width = (weaponAmmos[currentWp]/WEAPONS[currentWp].maxAmmo*100) + '%';
+                const left = Math.max(0, zombiesInWave - zombiesKilled);
+                document.getElementById('zombies-left-ui').innerText = left;
+                document.querySelectorAll('.weapon-slot').forEach(s => {
+                    const key = s.id.split('-')[1];
+                    s.classList.toggle('owned', ownedWeapons.includes(key));
+                    s.classList.toggle('active', currentWp === key);
+                });
+            }
+        }
+
+        class Zombie {
+            constructor() {
+                this.size = 30 + Math.random() * 10;
+                this.x = Math.random() * (canvas.width - this.size);
+                this.y = -60;
+                this.maxHp = 35 + (currentWave * 2); 
+                this.hp = this.maxHp;
+                this.speed = 0.35 + (Math.random() * 0.1); 
+                this.atWall = false;
+            }
+            update() {
+                const wallY = canvas.height - 160;
+                const dx = player.x - this.x;
+                this.x += Math.sign(dx) * 0.15;
+                if (wallHealth > 0 && this.y + this.size >= wallY) {
+                    this.atWall = true;
+                    wallHealth = Math.max(0, wallHealth - 0.05);
+                } else if (this.atWall && wallHealth <= 0) {
+                    this.atWall = false;
+                }
+                if (!this.atWall) {
+                    this.y += this.speed;
+                    if (this.y > canvas.height - 120) {
+                        health -= 0.15;
+                        return health <= 0;
+                    }
+                }
+                return this.hp <= 0;
+            }
+            draw() {
+                const ratio = this.hp / this.maxHp;
+                ctx.fillStyle = `rgb(${40 + (1-ratio)*100}, ${60 * ratio}, ${40 * ratio})`;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(this.x + 5, this.y + 8, 4, 4);
+                ctx.fillRect(this.x + this.size - 9, this.y + 8, 4, 4);
+                ctx.fillStyle = '#000';
+                ctx.fillRect(this.x, this.y - 10, this.size, 4);
+                ctx.fillStyle = '#ff4444';
+                ctx.fillRect(this.x, this.y - 10, this.size * ratio, 4);
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, ang, dmg, isCrit) {
+                this.x = x; this.y = y; this.ang = ang; this.dmg = dmg;
+                this.spd = 16;
+                this.isCrit = isCrit;
+            }
+            update() {
+                this.x += Math.cos(this.ang) * this.spd;
+                this.y += Math.sin(this.ang) * this.spd;
+                return (this.x < -100 || this.x > canvas.width + 100 || this.y < -100 || this.y > canvas.height + 100);
+            }
+            draw() {
+                ctx.save();
+                ctx.strokeStyle = this.isCrit ? '#ff0000' : '#fbbf24';
+                ctx.lineWidth = this.isCrit ? 6 : 3;
+                if(this.isCrit) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ff0000';
+                }
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x - Math.cos(this.ang) * 15, this.y - Math.sin(this.ang) * 15);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        let player = new Player();
+        let zombiesInWave = 0, zombiesSpawned = 0, zombiesKilled = 0, isWaveActive = false;
+
+        function startWave() {
+            currentWave++;
+            isWaveActive = true;
+            isPaused = false;
+            zombiesSpawned = 0;
+            zombiesKilled = 0;
+            zombiesInWave = 5 + (currentWave - 1);
+            const alert = document.getElementById('wave-alert');
+            document.getElementById('wave-title').innerText = `ONDA ${currentWave}`;
+            alert.style.opacity = "1";
+            setTimeout(() => alert.style.opacity = "0", 2500);
+            player.updateUI();
+        }
+
+        function openMenu() {
+            isPaused = true;
+            skillPoints++;
+            document.getElementById('modal-overlay').style.display = 'flex';
+            refreshShop();
+            refreshRPG();
+            player.updateUI();
+        }
+
+        window.nextWave = function() {
+            document.getElementById('modal-overlay').style.display = 'none';
+            startWave();
+        };
+
+        window.showTab = function(tab) {
+            document.getElementById('shop-tab').classList.toggle('hidden', tab !== 'shop');
+            document.getElementById('rpg-tab').classList.toggle('hidden', tab !== 'rpg');
+            const btns = document.querySelectorAll('#modal-overlay button');
+            btns[0].className = tab === 'shop' ? 'flex-1 py-4 bg-yellow-500 text-black font-black rounded-xl' : 'flex-1 py-4 bg-zinc-800 text-gray-400 font-black rounded-xl';
+            btns[1].className = tab === 'rpg' ? 'flex-1 py-4 bg-purple-600 text-white font-black rounded-xl' : 'flex-1 py-4 bg-zinc-800 text-gray-400 font-black rounded-xl';
+        };
+
+        window.buyUpgrade = function(type) {
+            if (type === 'heal' && gold >= 100) { gold -= 100; health = Math.min(maxHealth, health + 40); }
+            if (type === 'repair' && gold >= 150) { gold -= 150; wallHealth = Math.min(maxWallHealth, wallHealth + 60); }
+            refreshShop();
+            player.updateUI();
+        };
+
+        window.buyWeapon = function(key) {
+            if (gold >= WEAPONS[key].price) {
+                gold -= WEAPONS[key].price;
+                ownedWeapons.push(key);
+                refreshShop();
+                player.updateUI();
+            }
+        };
+
+        window.evolve = function(s) {
+            if (skillPoints > 0) {
+                skillPoints--;
+                stats[s]++;
+                if(s === 'hp') { maxHealth += 25; health += 25; }
+                refreshRPG();
+                player.updateUI();
+            }
+        };
+
+        function refreshShop() {
+            const shop = document.getElementById('shop-items');
+            shop.innerHTML = `
+                <div class="flex justify-between items-center bg-zinc-900 p-4 rounded-xl border border-white/5">
+                    <div><div class="font-black text-blue-400">ENGENHARIA</div><div class="text-[10px] text-gray-500 uppercase">+60 Resistência Muro</div></div>
+                    <button class="px-6 py-2 bg-yellow-500 text-black font-bold rounded-lg active:scale-95" onclick="buyUpgrade('repair')" ${gold < 150 ? 'style="opacity:0.3"' : ''}>$150</button>
+                </div>
+                <div class="flex justify-between items-center bg-zinc-900 p-4 rounded-xl border border-white/5">
+                    <div><div class="font-black text-green-400">SUPRIMENTOS</div><div class="text-[10px] text-gray-500 uppercase">+40 Pontos de Vida</div></div>
+                    <button class="px-6 py-2 bg-yellow-500 text-black font-bold rounded-lg active:scale-95" onclick="buyUpgrade('heal')" ${gold < 100 ? 'style="opacity:0.3"' : ''}>$100</button>
+                </div>
+            `;
+            for(const k in WEAPONS) {
+                if(k === 'pistol') continue;
+                const w = WEAPONS[k];
+                const owned = ownedWeapons.includes(k);
+                shop.innerHTML += `
+                    <div class="flex justify-between items-center bg-zinc-900 p-4 rounded-xl border border-white/5">
+                        <div><div class="font-black text-white uppercase">${w.name}</div><div class="text-[10px] text-gray-500 uppercase">Dano: ${w.dmg} | Pente: ${w.maxAmmo}</div></div>
+                        ${owned ? '<span class="text-green-500 font-black text-xs">ADQUIRIDA</span>' : 
+                        `<button class="px-6 py-2 bg-yellow-500 text-black font-bold rounded-lg active:scale-95" onclick="buyWeapon('${k}')" ${gold < w.price ? 'style="opacity:0.3"' : ''}>$${w.price}</button>`}
+                    </div>
+                `;
+            }
+        }
+
+        function refreshRPG() {
+            const rpg = document.getElementById('rpg-items');
+            const labels = { dmg: 'Calibre (Dano)', spd: 'Atleta (Velocidade)', hp: 'Vigor (Vida)', rel: 'Tático (Recarga)' };
+            rpg.innerHTML = '';
+            for(const s in stats) {
+                rpg.innerHTML += `
+                    <div class="flex justify-between items-center bg-zinc-900 p-4 rounded-xl border border-white/5">
+                        <div class="text-left"><div class="font-black text-purple-400 uppercase">${labels[s]}</div><div class="text-[10px] text-gray-500 uppercase">Nível atual: ${stats[s]}</div></div>
+                        <button class="px-6 py-2 bg-purple-600 text-white font-bold rounded-lg active:scale-95" onclick="evolve('${s}')" ${skillPoints <= 0 ? 'style="opacity:0.3"' : ''}>MELHORAR</button>
+                    </div>
+                `;
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (gameActive) {
+                if (!isPaused) {
+                    player.update();
+                    if (isWaveActive) {
+                        const spawnRate = 0.02 + (currentWave * 0.002);
+                        if (zombiesSpawned < zombiesInWave && Math.random() < Math.min(0.08, spawnRate)) {
+                            enemies.push(new Zombie());
+                            zombiesSpawned++;
+                            player.updateUI();
+                        }
+                        if (zombiesKilled >= zombiesInWave && enemies.length === 0) {
+                            isWaveActive = false;
+                            setTimeout(openMenu, 1200);
+                        }
+                    }
+
+                    for (let i = texts.length - 1; i >= 0; i--) {
+                        if(texts[i].update()) texts.splice(i, 1);
+                    }
+
+                    for (let i = enemies.length - 1; i >= 0; i--) {
+                        if (enemies[i].update()) {
+                            if (enemies[i].hp <= 0) { gold += 15; }
+                            zombiesKilled++;
+                            player.updateUI();
+                            enemies.splice(i, 1);
+                        }
+                    }
+
+                    for (let i = projectiles.length - 1; i >= 0; i--) {
+                        const p = projectiles[i];
+                        if (p.update()) { projectiles.splice(i, 1); continue; }
+                        for (let j = enemies.length - 1; j >= 0; j--) {
+                            const e = enemies[j];
+                            if (p.x > e.x && p.x < e.x + e.size && p.y > e.y && p.y < e.y + e.size) {
+                                e.hp -= p.dmg;
+                                if (p.isCrit && e.hp <= 0) {
+                                    texts.push(new FloatingText(e.x + e.size/2, e.y, "NA CABEÇA!", "#ff0000"));
+                                }
+                                projectiles.splice(i, 1);
+                                break;
+                            }
+                        }
+                    }
+                    if (health <= 0) {
+                        gameActive = false;
+                        document.getElementById('game-over').classList.remove('hidden');
+                        document.getElementById('final-wave').innerText = currentWave;
+                    }
+                }
+
+                // Desenha tudo mesmo pausado para não piscar
+                texts.forEach(t => t.draw());
+                enemies.forEach(e => e.draw());
+                projectiles.forEach(p => p.draw());
+            }
+            player.draw();
+            requestAnimationFrame(animate);
+        }
+
+        window.onload = () => {
+            startWave();
+            animate();
+        };
+    </script>
+</body>
+</html>
